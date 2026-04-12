@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { cssVar, toRgba } from '../lib/audio';
-import type { Mood } from '../types';
 
 function drawIdleRing(ctx: CanvasRenderingContext2D, W: number, H: number, idleT: number) {
-  const cx = W / 2, cy = H / 2;
+  const cx = W / 2;
+  const cy = H / 2;
   const r = 88 + Math.sin(idleT) * 4;
   const mc = cssVar('--mood-accent') || '#7c6aff';
   const g = ctx.createRadialGradient(cx, cy, r - 2, cx, cy, r + 20);
@@ -18,40 +18,56 @@ function drawIdleRing(ctx: CanvasRenderingContext2D, W: number, H: number, idleT
 export function useVisCanvas(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   analyserRef: React.RefObject<AnalyserNode | null>,
-  dataArrayRef: React.RefObject<Uint8Array | null>,
+  dataArrayRef: React.RefObject<Uint8Array<ArrayBuffer> | null>,
   freqBinCountRef: React.RefObject<number>,
   audioReadyRef: React.RefObject<boolean>,
   isPlaying: boolean,
-  onMoodData?: (data: Uint8Array) => void,
+  onMoodData?: (data: Uint8Array<ArrayBuffer>) => void,
 ) {
   const idleTRef = useRef(0);
   const rafRef = useRef<number | null>(null);
+  const frameRef = useRef(0);
 
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
     const ctx = cv.getContext('2d');
     if (!ctx) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const idleStep = reduceMotion ? 0.006 : 0.018;
+    const frameStride = reduceMotion ? 2 : 1;
 
     const loop = () => {
+      if (document.visibilityState === 'hidden') {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      frameRef.current += 1;
+      if (frameRef.current % frameStride !== 0) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
       rafRef.current = requestAnimationFrame(loop);
-      const W = cv.width, H = cv.height;
+      const W = cv.width;
+      const H = cv.height;
       ctx.clearRect(0, 0, W, H);
 
       if (!audioReadyRef.current || !isPlaying || !analyserRef.current || !dataArrayRef.current) {
-        idleTRef.current += 0.018;
+        idleTRef.current += idleStep;
         drawIdleRing(ctx, W, H, idleTRef.current);
         return;
       }
 
-      analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-      if (onMoodData) onMoodData(dataArrayRef.current);
+      const data = dataArrayRef.current;
+      analyserRef.current.getByteFrequencyData(data);
+      onMoodData?.(data);
 
-      const cx = W / 2, cy = H / 2;
+      const cx = W / 2;
+      const cy = H / 2;
       const artR = 88;
       const BARS = 120;
-      const step = Math.floor(freqBinCountRef.current / BARS);
-      const data = dataArrayRef.current;
+      const step = Math.max(1, Math.floor(freqBinCountRef.current / BARS));
 
       let bs = 0;
       for (let b = 0; b < 8; b++) bs += data[b];
@@ -98,6 +114,8 @@ export function useVisCanvas(
     };
 
     loop();
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [canvasRef, analyserRef, dataArrayRef, freqBinCountRef, audioReadyRef, isPlaying, onMoodData]);
 }

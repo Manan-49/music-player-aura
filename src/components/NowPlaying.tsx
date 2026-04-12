@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Track } from '../types';
 
 interface Props {
@@ -9,18 +11,49 @@ interface Props {
 export default function NowPlaying({ currentTrack, isLiked, onToggleLike }: Props) {
   const title = currentTrack?.title || currentTrack?.name || 'No track selected';
   const artist = currentTrack?.artist || (currentTrack ? 'Local file' : 'Add music to get started');
-  const isLong = title.length > 24;
+
+  const marqueeWrapRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const [marqueeShift, setMarqueeShift] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      const wrapWidth = marqueeWrapRef.current?.clientWidth ?? 0;
+      const titleWidth = titleRef.current?.scrollWidth ?? 0;
+      const overflow = Math.max(0, titleWidth - wrapWidth);
+      setMarqueeShift(overflow);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (marqueeWrapRef.current) observer.observe(marqueeWrapRef.current);
+    if (titleRef.current) observer.observe(titleRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [title]);
+
+  const titleStyle = { '--marquee-shift': `${marqueeShift}px` } as CSSProperties;
 
   return (
     <div className="now-playing">
       <div className="np-label">Now Playing</div>
-      <div className="marquee-wrap">
-        <div className={`now-title${isLong ? ' marquee' : ''}`}>{title}</div>
+      <div ref={marqueeWrapRef} className="marquee-wrap">
+        <div
+          ref={titleRef}
+          style={titleStyle}
+          className={`now-title${marqueeShift > 0 ? ' marquee' : ''}`}
+        >
+          {title}
+        </div>
       </div>
       <div className="now-artist">{artist}</div>
       <button
         className={`like-btn${isLiked ? ' liked' : ''}`}
         onClick={onToggleLike}
+        aria-label={isLiked ? 'Unlike track' : 'Like track'}
+        aria-pressed={isLiked}
         title="Like (L)"
       >
         {isLiked ? '♥' : '♡'}

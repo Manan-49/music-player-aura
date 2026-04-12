@@ -42,9 +42,13 @@ export function useAmbientCanvas(canvasRef: React.RefObject<HTMLCanvasElement | 
     resize();
     window.addEventListener('resize', resize);
 
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const speed = reduceMotion ? 0.001 : 0.0025;
+
     const loop = () => {
       rafRef.current = requestAnimationFrame(loop);
-      tRef.current += 0.0025;
+      if (document.visibilityState === 'hidden') return;
+      tRef.current += speed;
       const W = cv.width, H = cv.height;
       ctx.clearRect(0, 0, W, H);
       for (let i = 0; i < orbsRef.current.length; i++) {

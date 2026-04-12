@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { MOODS } from './types';
 import { usePlayerStore } from './hooks/usePlayerStore';
 import { useMoodEngine } from './hooks/useMoodEngine';
@@ -12,7 +12,6 @@ import Controls from './components/Controls';
 import BottomBar from './components/BottomBar';
 import ImmersiveOverlay from './components/ImmersiveOverlay';
 import Toast from './components/Toast';
-import DropZone from './components/DropZone';
 
 export default function App() {
   const store = usePlayerStore();
@@ -21,42 +20,80 @@ export default function App() {
   const moodConfig = MOODS[store.mood];
   const moodClass = moodConfig.cls;
 
+  const [mobileQueueOpen, setMobileQueueOpen] = useState(false);
+  const [playlistDialogOpen, setPlaylistDialogOpen] = useState(false);
+  const [playlistName, setPlaylistName] = useState('');
+  const [playlistError, setPlaylistError] = useState('');
+
+  const playlistInputRef = useRef<HTMLInputElement>(null);
+  const dropOverlayRef = useRef<HTMLDivElement>(null);
+
+  const {
+    audioRef,
+    togglePlay,
+    nextTrack,
+    prevTrack,
+    toggleShuffle,
+    toggleRepeat,
+    setVolume,
+    toggleImmersive,
+    toggleLike,
+    toggleMini,
+    addFiles,
+    currentIndex,
+    loadTrack,
+    immersiveOpen,
+    miniMode,
+    tracks,
+    playlists,
+    savePlaylist,
+  } = store;
+
   // Apply mood class to document root
   useEffect(() => {
     const allCls = Object.values(MOODS).map((m) => m.cls).filter(Boolean);
     document.documentElement.classList.remove(...allCls);
     if (moodClass) document.documentElement.classList.add(moodClass);
-    return () => { document.documentElement.classList.remove(...allCls); };
+    return () => {
+      document.documentElement.classList.remove(...allCls);
+    };
   }, [moodClass]);
 
   // Apply mini-mode class to document root
   useEffect(() => {
-    if (store.miniMode) {
-      document.documentElement.classList.add('mini-mode');
-    } else {
-      document.documentElement.classList.remove('mini-mode');
-    }
-  }, [store.miniMode]);
+    document.documentElement.classList.toggle('mini-mode', miniMode);
+  }, [miniMode]);
 
-  // Global drag-over for drop zone (triggered from window-level)
-  const dropOverlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!playlistDialogOpen) return;
+    playlistInputRef.current?.focus();
+  }, [playlistDialogOpen]);
+
+  useEffect(() => {
+    if (!mobileQueueOpen) return;
+    const handler = () => setMobileQueueOpen(false);
+    window.addEventListener('resize', handler, { once: true });
+    return () => window.removeEventListener('resize', handler);
+  }, [mobileQueueOpen]);
+
+  // Global drag-over for drop zone
   const handleGlobalDragOver = useCallback((e: DragEvent) => {
     e.preventDefault();
     dropOverlayRef.current?.classList.add('active');
   }, []);
+
   const handleGlobalDragLeave = useCallback((e: DragEvent) => {
     if (!e.relatedTarget) {
       dropOverlayRef.current?.classList.remove('active');
     }
   }, []);
+
   const handleGlobalDrop = useCallback((e: DragEvent) => {
     e.preventDefault();
     dropOverlayRef.current?.classList.remove('active');
-    const files = Array.from(e.dataTransfer?.files || []).filter(
-      (f) => f.type.startsWith('audio/') || /\.(mp3|flac|wav|ogg|m4a|aac)$/i.test(f.name),
-    );
-    if (files.length) store.addFiles(files);
-  }, [store.addFiles]);
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length) addFiles(files);
+  }, [addFiles]);
 
   useEffect(() => {
     window.addEventListener('dragover', handleGlobalDragOver);
@@ -73,61 +110,115 @@ export default function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'SELECT') return;
+      if (
+        target.tagName === 'INPUT'
+        || target.tagName === 'SELECT'
+        || target.tagName === 'TEXTAREA'
+        || target.isContentEditable
+      ) return;
 
-      const audio = store.audioRef.current;
+      const audio = audioRef.current;
       switch (e.code) {
         case 'Space':
           e.preventDefault();
-          store.togglePlay();
+          togglePlay();
           break;
         case 'ArrowRight':
-          if (e.shiftKey || e.metaKey || e.ctrlKey) store.nextTrack();
+          if (e.shiftKey || e.metaKey || e.ctrlKey) nextTrack();
           else if (audio?.duration) audio.currentTime = Math.min(audio.duration, audio.currentTime + 5);
           break;
         case 'ArrowLeft':
-          if (e.shiftKey || e.metaKey || e.ctrlKey) store.prevTrack();
+          if (e.shiftKey || e.metaKey || e.ctrlKey) prevTrack();
           else if (audio) audio.currentTime = Math.max(0, audio.currentTime - 5);
           break;
         case 'ArrowUp': {
           if (!audio) break;
           const v = Math.min(1, audio.volume + 0.05);
-          store.setVolume(v);
+          setVolume(v);
           break;
         }
         case 'ArrowDown': {
           if (!audio) break;
           const v = Math.max(0, audio.volume - 0.05);
-          store.setVolume(v);
+          setVolume(v);
           break;
         }
-        case 'KeyI': store.toggleImmersive(); break;
-        case 'KeyS': store.toggleShuffle(); break;
-        case 'KeyR': store.toggleRepeat(); break;
-        case 'KeyL': store.toggleLike(); break;
-        case 'KeyM': store.toggleMini(); break;
-        case 'Escape': if (store.immersiveOpen) store.toggleImmersive(); break;
+        case 'KeyI':
+          toggleImmersive();
+          break;
+        case 'KeyS':
+          toggleShuffle();
+          break;
+        case 'KeyR':
+          toggleRepeat();
+          break;
+        case 'KeyL':
+          toggleLike();
+          break;
+        case 'KeyM':
+          toggleMini();
+          break;
+        case 'KeyQ':
+          setMobileQueueOpen((v) => !v);
+          break;
+        case 'Escape':
+          if (immersiveOpen) toggleImmersive();
+          if (playlistDialogOpen) setPlaylistDialogOpen(false);
+          break;
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [store]);
+  }, [
+    audioRef,
+    immersiveOpen,
+    nextTrack,
+    playlistDialogOpen,
+    prevTrack,
+    setVolume,
+    toggleImmersive,
+    toggleLike,
+    toggleMini,
+    togglePlay,
+    toggleRepeat,
+    toggleShuffle,
+  ]);
 
   const handleSavePlaylist = useCallback(() => {
-    const name = window.prompt('Playlist name:');
-    if (name) store.savePlaylist(name);
-  }, [store.savePlaylist]);
+    setPlaylistError('');
+    setPlaylistName('');
+    setPlaylistDialogOpen(true);
+  }, []);
+
+  const handleConfirmSavePlaylist = useCallback(() => {
+    const name = playlistName.trim();
+    if (!name) {
+      setPlaylistError('Playlist name is required.');
+      return;
+    }
+    if (playlists[name]) {
+      setPlaylistError('A playlist with this name already exists.');
+      return;
+    }
+    savePlaylist(name);
+    setPlaylistDialogOpen(false);
+  }, [playlistName, playlists, savePlaylist]);
 
   const handleTrackSelect = useCallback((index: number) => {
-    if (index === store.currentIndex) store.togglePlay();
-    else store.loadTrack(index, true);
-  }, [store.currentIndex, store.togglePlay, store.loadTrack]);
+    if (index === currentIndex) togglePlay();
+    else loadTrack(index, true);
+    setMobileQueueOpen(false);
+  }, [currentIndex, loadTrack, togglePlay]);
+
+  const hasTracks = tracks.length > 0;
 
   return (
     <>
       <AmbientCanvas mood={store.mood} />
 
       <audio ref={store.audioRef} preload="auto" crossOrigin="anonymous" />
+
+      <div className={`mobile-sidebar-backdrop${mobileQueueOpen ? ' open' : ''}`} onClick={() => setMobileQueueOpen(false)} />
 
       <div className="app">
         <Header
@@ -139,6 +230,8 @@ export default function App() {
           onLoadPlaylist={store.loadPlaylist}
           onToggleImmersive={store.toggleImmersive}
           onToggleMini={store.toggleMini}
+          mobileQueueOpen={mobileQueueOpen}
+          onToggleMobileQueue={() => setMobileQueueOpen((v) => !v)}
         />
 
         <Sidebar
@@ -147,6 +240,8 @@ export default function App() {
           currentIndex={store.currentIndex}
           isPlaying={store.isPlaying}
           searchQuery={store.searchQuery}
+          mobileOpen={mobileQueueOpen}
+          onCloseMobile={() => setMobileQueueOpen(false)}
           onSelect={handleTrackSelect}
           onRemove={store.removeTrack}
           onReorder={store.reorderTrack}
@@ -154,7 +249,7 @@ export default function App() {
           onSearch={store.setSearchQuery}
         />
 
-        <main className="main" id="main-area">
+        <main className="main" id="main-area" aria-hidden={mobileQueueOpen}>
           <div ref={dropOverlayRef} className="drop-zone">
             <div className="dz-icon">🎶</div>
             <p>Drop audio files here</p>
@@ -188,6 +283,7 @@ export default function App() {
             />
 
             <Controls
+              hasTracks={hasTracks}
               isPlaying={store.isPlaying}
               shuffle={store.shuffle}
               repeat={store.repeat}
@@ -208,6 +304,11 @@ export default function App() {
           currentTrack={store.currentTrack}
           isPlaying={store.isPlaying}
           progress={store.progress}
+          miniMode={store.miniMode}
+          onToggleMini={store.toggleMini}
+          onTogglePlay={store.togglePlay}
+          onPrev={store.prevTrack}
+          onNext={store.nextTrack}
         />
       </div>
 
@@ -225,7 +326,40 @@ export default function App() {
         onSeek={store.seekTo}
       />
 
-      <Toast show={store.showToast} currentTrack={store.currentTrack} />
+      <Toast show={store.showToast} currentTrack={store.currentTrack} errorMessage={store.errorMessage} />
+
+      {playlistDialogOpen && (
+        <div className="playlist-modal-backdrop" onClick={() => setPlaylistDialogOpen(false)}>
+          <div
+            className="playlist-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Save playlist"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2>Save Playlist</h2>
+            <input
+              ref={playlistInputRef}
+              type="text"
+              value={playlistName}
+              onChange={(e) => {
+                setPlaylistName(e.target.value);
+                if (playlistError) setPlaylistError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmSavePlaylist();
+              }}
+              placeholder="Playlist name"
+              aria-label="Playlist name"
+            />
+            {playlistError && <p className="playlist-error">{playlistError}</p>}
+            <div className="playlist-actions">
+              <button onClick={() => setPlaylistDialogOpen(false)}>Cancel</button>
+              <button onClick={handleConfirmSavePlaylist}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

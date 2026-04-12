@@ -16,6 +16,12 @@ export function toRgba(hex: string, alpha: number): string {
     const n = hex.match(/[\d.]+/g);
     if (n && n.length >= 3) return `rgba(${n[0]},${n[1]},${n[2]},${alpha})`;
   }
+  if (hex.length === 4 && hex.startsWith('#')) {
+    const r = parseInt(`${hex[1]}${hex[1]}`, 16);
+    const g = parseInt(`${hex[2]}${hex[2]}`, 16);
+    const b = parseInt(`${hex[3]}${hex[3]}`, 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
   if (hex.charAt(0) !== '#') return `rgba(124,106,255,${alpha})`;
   const r = parseInt(hex.slice(1, 3), 16) || 124;
   const g = parseInt(hex.slice(3, 5), 16) || 106;
@@ -107,10 +113,25 @@ export function extractMeta(track: Track): Promise<MetaResult> {
 
 export function extractDuration(track: Track): Promise<number | null> {
   if (!track.blob) return Promise.resolve(null);
-  return track.blob.arrayBuffer().then((buf) => {
-    const offCtx = new OfflineAudioContext(1, 1, 44100);
-    return offCtx.decodeAudioData(buf.slice(0)).then((decoded) => decoded.duration);
-  }).catch(() => null);
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(track.blob);
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    audio.src = url;
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      audio.src = '';
+    };
+    audio.onloadedmetadata = () => {
+      const d = Number.isFinite(audio.duration) ? audio.duration : null;
+      cleanup();
+      resolve(d);
+    };
+    audio.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+  });
 }
 
 export function buildWaveformData(blob: File, pts = 220): Promise<{ data: Float32Array; duration: number }> {

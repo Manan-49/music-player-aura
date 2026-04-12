@@ -37,8 +37,19 @@ export default function WaveformSection({
         onClick={handleClick}
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
+        aria-hidden="true"
       />
-      <div className={`wf-loading${waveformLoading ? ' show' : ''}`}>Rendering waveform…</div>
+      <input
+        className="wf-seek-range"
+        type="range"
+        min="0"
+        max="1000"
+        step="1"
+        value={Math.round(progress * 1000)}
+        onChange={(e) => onSeek(parseFloat(e.target.value) / 1000)}
+        aria-label="Seek position"
+      />
+      <div className={`wf-loading${waveformLoading ? ' show' : ''}`}>Rendering waveform...</div>
       <div className="progress-times">
         <span>{fmt(currentTime)}</span>
         <span>{fmt(duration)}</span>

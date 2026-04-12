@@ -6,11 +6,11 @@ interface Props {
   currentTrack: Track | null;
   isPlaying: boolean;
   analyserRef: React.RefObject<AnalyserNode | null>;
-  dataArrayRef: React.RefObject<Uint8Array | null>;
+  dataArrayRef: React.RefObject<Uint8Array<ArrayBuffer> | null>;
   freqBinCountRef: React.RefObject<number>;
   audioReadyRef: React.RefObject<boolean>;
   onTogglePlay: () => void;
-  onMoodData?: (data: Uint8Array) => void;
+  onMoodData?: (data: Uint8Array<ArrayBuffer>) => void;
 }
 
 export default function AlbumArt({
@@ -30,13 +30,10 @@ export default function AlbumArt({
   return (
     <div className="album-section">
       <canvas ref={visCvRef} className="vis-canvas" width={310} height={310} />
-      <div
+      <button
         className={`album-art${isPlaying ? ' playing' : ''}`}
         onClick={onTogglePlay}
-        role="button"
-        tabIndex={0}
         aria-label="Play / Pause"
-        onKeyDown={(e) => e.code === 'Space' && onTogglePlay()}
       >
         {currentTrack?.art ? (
           <img src={currentTrack.art} alt="" />
@@ -44,7 +41,7 @@ export default function AlbumArt({
           <span className="art-emoji">🎵</span>
         )}
         <div className="vinyl-ring" />
-      </div>
+      </button>
     </div>
   );
 }

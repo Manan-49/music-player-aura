@@ -1,6 +1,7 @@
 import { SPEEDS } from '../types';
 
 interface Props {
+  hasTracks: boolean;
   isPlaying: boolean;
   shuffle: boolean;
   repeat: boolean;
@@ -29,8 +30,19 @@ const PauseIcon = () => (
 );
 
 export default function Controls({
-  isPlaying, shuffle, repeat, volume, speedIdx,
-  onTogglePlay, onPrev, onNext, onToggleShuffle, onToggleRepeat, onSetVolume, onCycleSpeed,
+  hasTracks,
+  isPlaying,
+  shuffle,
+  repeat,
+  volume,
+  speedIdx,
+  onTogglePlay,
+  onPrev,
+  onNext,
+  onToggleShuffle,
+  onToggleRepeat,
+  onSetVolume,
+  onCycleSpeed,
 }: Props) {
   const speed = SPEEDS[speedIdx];
 
@@ -41,6 +53,9 @@ export default function Controls({
           className={`ctrl-btn${shuffle ? ' active' : ''}`}
           title="Shuffle (S)"
           onClick={onToggleShuffle}
+          aria-label="Toggle shuffle"
+          aria-pressed={shuffle}
+          disabled={!hasTracks}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="16 3 21 3 21 8" />
@@ -50,18 +65,30 @@ export default function Controls({
           </svg>
         </button>
 
-        <button className="ctrl-btn" onClick={onPrev} title="Previous (Shift+←)">
+        <button
+          className="ctrl-btn"
+          onClick={onPrev}
+          title="Previous (Shift+Left)"
+          aria-label="Previous track"
+          disabled={!hasTracks}
+        >
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 20L9 12l10-8v16z" />
             <rect x="5" y="4" width="2" height="16" />
           </svg>
         </button>
 
-        <button className="play-btn" onClick={onTogglePlay} aria-label="Play / Pause">
+        <button className="play-btn" onClick={onTogglePlay} aria-label="Play / Pause" disabled={!hasTracks}>
           {isPlaying ? <PauseIcon /> : <PlayIcon />}
         </button>
 
-        <button className="ctrl-btn" onClick={onNext} title="Next (Shift+→)">
+        <button
+          className="ctrl-btn"
+          onClick={onNext}
+          title="Next (Shift+Right)"
+          aria-label="Next track"
+          disabled={!hasTracks}
+        >
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M5 4l10 8-10 8V4z" />
             <rect x="17" y="4" width="2" height="16" />
@@ -72,6 +99,9 @@ export default function Controls({
           className={`ctrl-btn${repeat ? ' active' : ''}`}
           title="Repeat (R)"
           onClick={onToggleRepeat}
+          aria-label="Toggle repeat"
+          aria-pressed={repeat}
+          disabled={!hasTracks}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="17 1 21 5 17 9" />
@@ -100,10 +130,19 @@ export default function Controls({
               value={volume}
               onChange={(e) => onSetVolume(parseFloat(e.target.value))}
               aria-label="Volume"
+              disabled={!hasTracks}
             />
           </div>
         </div>
-        <button className="speed-btn" onClick={onCycleSpeed} title="Speed">{speed}×</button>
+        <button
+          className="speed-btn"
+          onClick={onCycleSpeed}
+          title="Speed"
+          aria-label="Playback speed"
+          disabled={!hasTracks}
+        >
+          {speed}x
+        </button>
       </div>
     </>
   );

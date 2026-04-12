@@ -1,8 +1,12 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Track, Mood } from '../types';
 import { SPEEDS } from '../types';
 import { openDB, dbPut, dbGetAll, dbDelete, dbClear } from '../lib/db';
-import { cleanName, extractMeta, extractDuration, extractAverageColor } from '../lib/audio';
+import { cleanName, extractMeta, extractDuration, extractAverageColor, buildWaveformData } from '../lib/audio';
+
+function isAudioFile(file: File): boolean {
+  return file.type.startsWith('audio/') || /\.(mp3|flac|wav|ogg|m4a|aac)$/i.test(file.name);
+}
 
 export function usePlayerStore() {
   const [library, setLibrary] = useState<Track[]>([]);
@@ -32,6 +36,7 @@ export function usePlayerStore() {
   const [waveformData, setWaveformData] = useState<Float32Array | null>(null);
   const [waveformLoading, setWaveformLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const dbRef = useRef<IDBDatabase | null>(null);
@@ -39,7 +44,7 @@ export function usePlayerStore() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const mediaSrcRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const freqBinCountRef = useRef(0);
   const audioReadyRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,6 +53,8 @@ export function usePlayerStore() {
   const tracksRef = useRef<Track[]>([]);
   const isPlayingRef = useRef(false);
   const libraryRef = useRef<Track[]>([]);
+  const waveformCacheRef = useRef<Map<string, { data: Float32Array; duration: number }>>(new Map());
+  const timePersistRef = useRef(0);
 
   currentIndexRef.current = currentIndex;
   tracksRef.current = tracks;
@@ -58,10 +65,27 @@ export function usePlayerStore() {
     localStorage.setItem('aura:order', JSON.stringify(t.map((x) => x.id)));
   }, []);
 
-  const triggerToast = useCallback(() => {
+  const showNowPlayingToast = useCallback(() => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setErrorMessage(null);
     setShowToast(true);
-    toastTimerRef.current = setTimeout(() => setShowToast(false), 3800);
+    toastTimerRef.current = setTimeout(() => setShowToast(false), 3000);
+  }, []);
+
+  const showErrorToast = useCallback((message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setErrorMessage(message);
+    setShowToast(true);
+    toastTimerRef.current = setTimeout(() => {
+      setShowToast(false);
+      setErrorMessage(null);
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
   // Boot: open DB, restore tracks
@@ -85,14 +109,16 @@ export function usePlayerStore() {
       setShuffle(sh);
       setRepeat(rp);
 
-      const lastIdx = parseInt(localStorage.getItem('aura:lastIdx') || '-1');
+      const lastIdx = parseInt(localStorage.getItem('aura:lastIdx') || '-1', 10);
       if (lastIdx >= 0 && loaded[lastIdx]) {
         await loadTrackInternal(lastIdx, false, loaded);
         const t = parseFloat(localStorage.getItem('aura:lastTime') || '0');
         if (t && audioRef.current) audioRef.current.currentTime = t;
       }
-    })();
-  }, []);
+    })().catch(() => {
+      showErrorToast('Could not restore library from local storage.');
+    });
+  }, [showErrorToast]);
 
   const ensureAudioCtx = useCallback(() => {
     if (!audioReadyRef.current && audioRef.current) {
@@ -101,7 +127,7 @@ export function usePlayerStore() {
       analyser.fftSize = 2048;
       analyser.smoothingTimeConstant = 0.83;
       freqBinCountRef.current = analyser.frequencyBinCount;
-      dataArrayRef.current = new Uint8Array(freqBinCountRef.current);
+      dataArrayRef.current = new Uint8Array(freqBinCountRef.current) as Uint8Array<ArrayBuffer>;
       const gainNode = ctx.createGain();
       const mediaSrc = ctx.createMediaElementSource(audioRef.current);
       mediaSrc.connect(gainNode);
@@ -114,30 +140,35 @@ export function usePlayerStore() {
       audioReadyRef.current = true;
     }
     if (audioCtxRef.current?.state === 'suspended') {
-      audioCtxRef.current.resume();
+      audioCtxRef.current.resume().catch(() => {});
     }
   }, []);
 
   const buildWaveform = useCallback(async (track: Track) => {
+    const cached = waveformCacheRef.current.get(track.id);
+    if (cached) {
+      setWaveformData(cached.data);
+      setDuration(cached.duration);
+      return;
+    }
     if (wfWorkingRef.current) return;
     wfWorkingRef.current = true;
     setWaveformLoading(true);
     setWaveformData(null);
     try {
-      const { buildWaveformData } = await import('../lib/audio');
       const result = await buildWaveformData(track.blob);
+      waveformCacheRef.current.set(track.id, result);
       setWaveformData(result.data);
       setDuration(result.duration);
-      if (!track.duration) {
-        track.duration = result.duration;
-      }
+      if (!track.duration) track.duration = result.duration;
     } catch {
       setWaveformData(null);
+      showErrorToast('Could not render waveform for this track.');
     } finally {
       wfWorkingRef.current = false;
       setWaveformLoading(false);
     }
-  }, []);
+  }, [showErrorToast]);
 
   const applyTheme = useCallback(async (art: string | null, curMood: Mood) => {
     if (!art || curMood !== 'standby') return;
@@ -163,7 +194,7 @@ export function usePlayerStore() {
     }
 
     buildWaveform(t);
-    triggerToast();
+    showNowPlayingToast();
     applyTheme(t.art, 'standby');
     localStorage.setItem('aura:lastIdx', String(index));
 
@@ -171,7 +202,9 @@ export function usePlayerStore() {
       const title = t.title || t.name;
       const artist = t.artist || 'Unknown';
       navigator.mediaSession.metadata = new MediaMetadata({
-        title, artist, artwork: t.art ? [{ src: t.art }] : [],
+        title,
+        artist,
+        artwork: t.art ? [{ src: t.art }] : [],
       });
     }
 
@@ -184,22 +217,23 @@ export function usePlayerStore() {
         setIsPlaying(false);
       }
     }
-  }, [buildWaveform, triggerToast, applyTheme, ensureAudioCtx, speedIdx]);
+  }, [applyTheme, buildWaveform, ensureAudioCtx, showNowPlayingToast, speedIdx]);
 
-  const loadTrack = useCallback((index: number, autoplay = false) => {
-    return loadTrackInternal(index, autoplay);
-  }, [loadTrackInternal]);
+  const loadTrack = useCallback((index: number, autoplay = false) => loadTrackInternal(index, autoplay), [loadTrackInternal]);
 
   const togglePlay = useCallback(() => {
     if (!tracksRef.current.length) return;
-    if (currentIndexRef.current === -1) { loadTrack(0, true); return; }
+    if (currentIndexRef.current === -1) {
+      loadTrack(0, true);
+      return;
+    }
     if (isPlayingRef.current) {
       audioRef.current?.pause();
     } else {
       ensureAudioCtx();
-      audioRef.current?.play().catch(() => {});
+      audioRef.current?.play().catch(() => showErrorToast('Playback could not be started.'));
     }
-  }, [loadTrack, ensureAudioCtx]);
+  }, [ensureAudioCtx, loadTrack, showErrorToast]);
 
   const nextTrack = useCallback(() => {
     const tl = tracksRef.current;
@@ -212,7 +246,7 @@ export function usePlayerStore() {
       next = (currentIndexRef.current + 1) % tl.length;
     }
     loadTrack(next, true);
-  }, [shuffle, loadTrack]);
+  }, [loadTrack, shuffle]);
 
   const prevTrack = useCallback(() => {
     if (!tracksRef.current.length) return;
@@ -225,11 +259,19 @@ export function usePlayerStore() {
   }, [loadTrack]);
 
   const toggleShuffle = useCallback(() => {
-    setShuffle((s) => { localStorage.setItem('aura:shuffle', String(!s)); return !s; });
+    setShuffle((s) => {
+      const next = !s;
+      localStorage.setItem('aura:shuffle', String(next));
+      return next;
+    });
   }, []);
 
   const toggleRepeat = useCallback(() => {
-    setRepeat((r) => { localStorage.setItem('aura:repeat', String(!r)); return !r; });
+    setRepeat((r) => {
+      const next = !r;
+      localStorage.setItem('aura:repeat', String(next));
+      return next;
+    });
   }, []);
 
   const setVolume = useCallback((v: number) => {
@@ -252,7 +294,8 @@ export function usePlayerStore() {
     if (!key) return;
     setLikedTracks((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       localStorage.setItem('aura:likes', JSON.stringify([...next]));
       return next;
     });
@@ -266,8 +309,18 @@ export function usePlayerStore() {
     const db = dbRef.current;
     if (!db) return;
 
+    const valid = files.filter(isAudioFile);
+    const invalidCount = files.length - valid.length;
+    if (!valid.length) {
+      showErrorToast('No supported audio files were added.');
+      return;
+    }
+    if (invalidCount > 0) {
+      showErrorToast(`Skipped ${invalidCount} unsupported file${invalidCount > 1 ? 's' : ''}.`);
+    }
+
     const newTracks: Track[] = [];
-    for (const file of files) {
+    for (const file of valid) {
       const id = crypto.randomUUID();
       const url = URL.createObjectURL(file);
       const name = cleanName(file.name);
@@ -285,10 +338,7 @@ export function usePlayerStore() {
       const updated = [...prev, ...newTracks];
       tracksRef.current = updated;
       saveOrder(updated);
-
-      if (currentIndexRef.current === -1 && updated.length) {
-        loadTrack(0, false);
-      }
+      if (currentIndexRef.current === -1 && updated.length) loadTrack(0, false);
       return updated;
     });
 
@@ -302,18 +352,27 @@ export function usePlayerStore() {
           name: meta.title || track.name,
         };
         Object.assign(track, updated);
-        await dbPut(db, { id: track.id, name: track.name, blob: track.blob, title: track.title, artist: track.artist, art: track.art, duration: track.duration });
+        await dbPut(db, {
+          id: track.id,
+          name: track.name,
+          blob: track.blob,
+          title: track.title,
+          artist: track.artist,
+          art: track.art,
+          duration: track.duration,
+        });
         setTracks((prev) => [...prev]);
         setLibrary((prev) => [...prev]);
-      });
+      }).catch(() => {});
+
       extractDuration(track).then((dur) => {
         if (dur !== null) {
           track.duration = dur;
           setTracks((prev) => [...prev]);
         }
-      });
+      }).catch(() => {});
     }
-  }, [loadTrack, saveOrder]);
+  }, [loadTrack, saveOrder, showErrorToast]);
 
   const removeTrack = useCallback((idx: number) => {
     const db = dbRef.current;
@@ -321,6 +380,7 @@ export function usePlayerStore() {
     if (!tl[idx]) return;
     URL.revokeObjectURL(tl[idx].url);
     if (db) dbDelete(db, tl[idx].id);
+    waveformCacheRef.current.delete(tl[idx].id);
 
     setLibrary((prev) => prev.filter((x) => x.id !== tl[idx].id));
     setTracks((prev) => {
@@ -332,7 +392,10 @@ export function usePlayerStore() {
           const newIdx = Math.min(idx, next.length - 1);
           setTimeout(() => loadTrack(newIdx, isPlayingRef.current), 0);
         } else {
-          if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.src = '';
+          }
           setIsPlaying(false);
           setCurrentIndex(-1);
           setWaveformData(null);
@@ -366,7 +429,10 @@ export function usePlayerStore() {
 
   const clearAll = useCallback(() => {
     if (!tracksRef.current.length) return;
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
     for (const t of tracksRef.current) URL.revokeObjectURL(t.url);
     if (dbRef.current) dbClear(dbRef.current);
     localStorage.removeItem('aura:order');
@@ -379,6 +445,8 @@ export function usePlayerStore() {
     setCurrentTime(0);
     setDuration(0);
     setMoodState('standby');
+    setErrorMessage(null);
+    waveformCacheRef.current.clear();
   }, []);
 
   const setMood = useCallback((m: Mood) => {
@@ -394,21 +462,52 @@ export function usePlayerStore() {
   }, [playlists]);
 
   const loadPlaylist = useCallback((name: string) => {
+    const activeId = tracksRef.current[currentIndexRef.current]?.id || null;
     setActivePlaylist(name);
+
     if (name === 'Library' || !name) {
-      setTracks([...libraryRef.current]);
-      setCurrentIndex(-1);
+      const base = [...libraryRef.current];
+      setTracks(base);
+      const preservedIdx = activeId ? base.findIndex((t) => t.id === activeId) : -1;
+      if (preservedIdx >= 0) setCurrentIndex(preservedIdx);
+      else {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = '';
+        }
+        setCurrentIndex(-1);
+        setIsPlaying(false);
+        setProgress(0);
+      }
       return;
     }
+
     const ids = playlists[name] || [];
-    const filtered = ids.map((id) => libraryRef.current.find((t) => t.id === id)).filter(Boolean) as Track[];
+    const filtered = ids
+      .map((id) => libraryRef.current.find((t) => t.id === id))
+      .filter(Boolean) as Track[];
     setTracks(filtered);
-    setCurrentIndex(-1);
+    const preservedIdx = activeId ? filtered.findIndex((t) => t.id === activeId) : -1;
+    if (preservedIdx >= 0) {
+      setCurrentIndex(preservedIdx);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      setCurrentIndex(-1);
+      setIsPlaying(false);
+      setProgress(0);
+      setCurrentTime(0);
+      setDuration(0);
+      setWaveformData(null);
+    }
   }, [playlists]);
 
   const seekTo = useCallback((ratio: number) => {
     if (!audioRef.current?.duration) return;
-    audioRef.current.currentTime = ratio * audioRef.current.duration;
+    const clamped = Math.max(0, Math.min(1, ratio));
+    audioRef.current.currentTime = clamped * audioRef.current.duration;
   }, []);
 
   // Audio event handlers
@@ -416,10 +515,17 @@ export function usePlayerStore() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onPlay = () => { setIsPlaying(true); ensureAudioCtx(); };
+    const onPlay = () => {
+      setIsPlaying(true);
+      ensureAudioCtx();
+    };
     const onPause = () => setIsPlaying(false);
     const onEnded = () => {
-      if (repeat) { audio.currentTime = 0; audio.play(); return; }
+      if (repeat) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        return;
+      }
       nextTrack();
     };
     const onTimeUpdate = () => {
@@ -429,7 +535,11 @@ export function usePlayerStore() {
       setCurrentTime(cur);
       setDuration(dur);
       setProgress(pct);
-      if (Date.now() % 5000 < 250) localStorage.setItem('aura:lastTime', String(audio.currentTime));
+      const now = performance.now();
+      if (now - timePersistRef.current > 5000) {
+        timePersistRef.current = now;
+        localStorage.setItem('aura:lastTime', String(audio.currentTime));
+      }
     };
 
     audio.addEventListener('play', onPlay);
@@ -469,15 +579,22 @@ export function usePlayerStore() {
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
-  const isLiked = currentIndex >= 0 && likedTracks.has(tracks[currentIndex]?.id);
-  const currentTrack = currentIndex >= 0 ? tracks[currentIndex] : null;
+  const currentTrack = useMemo(
+    () => (currentIndex >= 0 ? tracks[currentIndex] : null),
+    [currentIndex, tracks],
+  );
+  const isLiked = useMemo(
+    () => currentIndex >= 0 && likedTracks.has(tracks[currentIndex]?.id),
+    [currentIndex, likedTracks, tracks],
+  );
   const speed = SPEEDS[speedIdx];
-  const filteredTracks = searchQuery
-    ? tracks.map((t, i) => ({ t, i })).filter(({ t }) => {
-        const q = searchQuery.toLowerCase();
-        return t.name.toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q);
-      })
-    : tracks.map((t, i) => ({ t, i }));
+  const filteredTracks = useMemo(() => {
+    if (!searchQuery) return tracks.map((t, i) => ({ t, i }));
+    const q = searchQuery.toLowerCase();
+    return tracks
+      .map((t, i) => ({ t, i }))
+      .filter(({ t }) => t.name.toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q));
+  }, [tracks, searchQuery]);
 
   return {
     audioRef,
@@ -508,6 +625,7 @@ export function usePlayerStore() {
     waveformData,
     waveformLoading,
     showToast,
+    errorMessage,
     filteredTracks,
     loadTrack,
     togglePlay,
@@ -530,5 +648,6 @@ export function usePlayerStore() {
     loadPlaylist,
     seekTo,
     setWaveformData,
+    showErrorToast,
   };
 }

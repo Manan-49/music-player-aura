@@ -6,7 +6,7 @@ export function useMoodEngine(setMood: (m: Mood) => void) {
   const currentMoodRef = useRef<Mood>('standby');
   const moodFramesRef = useRef(0);
 
-  const analyzeMood = useCallback((data: Uint8Array) => {
+  const analyzeMood = useCallback((data: Uint8Array<ArrayBuffer>) => {
     if (++moodFramesRef.current % 30 !== 0) return;
     let bass = 0, mid = 0, high = 0;
     for (let i = 0; i < 8; i++) bass += data[i];
