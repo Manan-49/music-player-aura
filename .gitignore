@@ -22,3 +22,6 @@ Thumbs.db
 # misc
 *.tsbuildinfo
 *.log
+
+.agent\skills\*
+
