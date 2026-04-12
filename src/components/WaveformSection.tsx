@@ -12,54 +12,31 @@ interface Props {
 }
 
 export default function WaveformSection({
-  waveformData,
-  waveformLoading,
-  progress,
-  currentTime,
-  duration,
-  onSeek,
+  waveformData, waveformLoading, progress, currentTime, duration, onSeek,
 }: Props) {
-  const cvRef = useRef<HTMLCanvasElement>(null);
-  const sectionRef = useRef<HTMLDivElement>(null);
+  const cvRef  = useRef<HTMLCanvasElement>(null);
+  const secRef = useRef<HTMLDivElement>(null);
   const { onMouseMove, onMouseLeave } = useWaveform(cvRef, waveformData, progress);
 
-  const getSeekRatio = useCallback(
-    (clientX: number, element: HTMLElement) => {
-      const rect = element.getBoundingClientRect();
-      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    },
-    [],
+  const ratio = useCallback(
+    (clientX: number, el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    }, [],
   );
 
   const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      onSeek(getSeekRatio(e.clientX, e.currentTarget));
-    },
-    [onSeek, getSeekRatio],
-  );
+    (e: React.MouseEvent<HTMLCanvasElement>) => onSeek(ratio(e.clientX, e.currentTarget)), [onSeek, ratio]);
 
   const handleTouch = useCallback(
     (e: React.TouchEvent<HTMLCanvasElement>) => {
       if (e.touches.length !== 1) return;
-      const ratio = getSeekRatio(e.touches[0].clientX, e.currentTarget);
-      onSeek(ratio);
-    },
-    [onSeek, getSeekRatio],
-  );
-
-  const handleRangeChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onSeek(parseFloat(e.target.value) / 1000);
-    },
-    [onSeek],
-  );
+      onSeek(ratio(e.touches[0].clientX, e.currentTarget));
+    }, [onSeek, ratio]);
 
   return (
-    <div className="waveform-section" ref={sectionRef}>
-      <canvas
-        ref={cvRef}
-        className="waveform-canvas"
-        height={46}
+    <div className="waveform-section" ref={secRef}>
+      <canvas ref={cvRef} className="waveform-canvas" height={48}
         onClick={handleClick}
         onTouchStart={handleTouch}
         onTouchMove={handleTouch}
@@ -67,17 +44,12 @@ export default function WaveformSection({
         onMouseLeave={onMouseLeave}
         aria-hidden="true"
       />
-      <input
-        className="wf-seek-range"
-        type="range"
-        min="0"
-        max="1000"
-        step="1"
+      <input className="wf-seek-range" type="range" min="0" max="1000" step="1"
         value={Math.round(progress * 1000)}
-        onChange={handleRangeChange}
-        aria-label="Seek position"
+        onChange={(e) => onSeek(parseFloat(e.target.value) / 1000)}
+        aria-label="Seek"
       />
-      <div className={`wf-loading${waveformLoading ? ' show' : ''}`}>Rendering waveform…</div>
+      <div className={`wf-loading${waveformLoading ? ' show' : ''}`}>Rendering…</div>
       <div className="progress-times">
         <span>{fmt(currentTime)}</span>
         <span>{fmt(duration)}</span>

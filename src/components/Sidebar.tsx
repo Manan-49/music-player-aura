@@ -19,96 +19,69 @@ interface Props {
   onSearch: (q: string) => void;
 }
 
-const ITEM_HEIGHT = 54;
-const OVERSCAN = 7;
+const ITEM_H = 54;
+const OVER = 8;
 
 function Sidebar({
-  tracks,
-  filteredTracks,
-  currentIndex,
-  isPlaying,
-  searchQuery,
-  mobileOpen,
-  collapsed,
-  onCloseMobile,
-  onToggleCollapse,
-  onSelect,
-  onRemove,
-  onReorder,
-  onClearAll,
-  onSearch,
+  tracks, filteredTracks, currentIndex, isPlaying,
+  searchQuery, mobileOpen, collapsed,
+  onCloseMobile, onToggleCollapse, onSelect, onRemove, onReorder, onClearAll, onSearch,
 }: Props) {
   const n = tracks.length;
-  const queueRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(0);
+  const [viewH, setViewH] = useState(0);
 
   useEffect(() => {
-    const updateHeight = () => {
-      if (queueRef.current) setViewportHeight(queueRef.current.clientHeight);
-    };
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
+    const update = () => { if (listRef.current) setViewH(listRef.current.clientHeight); };
+    update();
+    const ro = new ResizeObserver(update);
+    if (listRef.current) ro.observe(listRef.current);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
     setScrollTop(0);
-    if (queueRef.current) queueRef.current.scrollTop = 0;
+    if (listRef.current) listRef.current.scrollTop = 0;
   }, [searchQuery, n]);
 
-  const { startIndex, visible } = useMemo(() => {
+  const { startIdx, visible } = useMemo(() => {
     const total = filteredTracks.length;
-    const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
-    const end = Math.min(
-      total,
-      Math.ceil((scrollTop + Math.max(viewportHeight, ITEM_HEIGHT)) / ITEM_HEIGHT) + OVERSCAN,
-    );
-    return {
-      startIndex: start,
-      visible: filteredTracks.slice(start, end),
-    };
-  }, [filteredTracks, scrollTop, viewportHeight]);
+    const start = Math.max(0, Math.floor(scrollTop / ITEM_H) - OVER);
+    const end = Math.min(total, Math.ceil((scrollTop + Math.max(viewH, ITEM_H)) / ITEM_H) + OVER);
+    return { startIdx: start, visible: filteredTracks.slice(start, end) };
+  }, [filteredTracks, scrollTop, viewH]);
 
-  const asideClass = [
-    'sidebar',
-    mobileOpen && 'open',
-    collapsed && 'collapsed',
-  ].filter(Boolean).join(' ');
+  const cls = ['sidebar', mobileOpen && 'open', collapsed && 'collapsed'].filter(Boolean).join(' ');
 
   return (
-    <aside className={asideClass} aria-label="Queue">
+    <aside className={cls} aria-label="Queue">
+      {/* Header */}
       <div className="sidebar-header">
-        <div className="sidebar-header-left">
+        <div className="sidebar-title-row">
           <span className="sidebar-title">Queue</span>
-          <button
-            className="sidebar-icon-btn sidebar-collapse-btn"
-            onClick={onToggleCollapse}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-          >
+          {/* Desktop collapse */}
+          <button className="s-btn s-btn-collapse" onClick={onToggleCollapse}
+            aria-label="Collapse sidebar" title="Collapse">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
         </div>
+
         <div className="sidebar-meta">
-          <span className="track-count">{n} track{n !== 1 ? 's' : ''}</span>
-          <button
-            className="sidebar-icon-btn"
-            onClick={onClearAll}
-            title="Clear all"
-            aria-label="Clear all tracks"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
+          <span className="track-badge">{n}</span>
+          <button className="s-btn" onClick={onClearAll}
+            title="Clear all" aria-label="Clear all">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+              <path d="M10 11v6M14 11v6" />
             </svg>
           </button>
-          <button
-            className="sidebar-icon-btn sidebar-close"
-            onClick={onCloseMobile}
-            aria-label="Close queue panel"
-          >
+          {/* Mobile close */}
+          <button className="s-btn s-btn-close" onClick={onCloseMobile}
+            aria-label="Close queue">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
@@ -116,15 +89,15 @@ function Sidebar({
         </div>
       </div>
 
+      {/* Search */}
       <div className="sidebar-search">
-        <div className="search-wrap">
+        <div className="search-box">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
+            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
           </svg>
           <input
             type="text"
-            placeholder="Search tracks..."
+            placeholder="Search…"
             value={searchQuery}
             onChange={(e) => onSearch(e.target.value)}
             autoComplete="off"
@@ -133,33 +106,33 @@ function Sidebar({
         </div>
       </div>
 
+      {/* List */}
       <div
-        ref={queueRef}
+        ref={listRef}
         className="queue-list"
         role="list"
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       >
         {n === 0 ? (
-          <div className="queue-empty">
-            <div className="emp-icon">🎵</div>
-            <p>Drop <strong>MP3 / FLAC / WAV</strong> files<br />or click <strong>Add Music</strong></p>
+          <div className="q-empty">
+            <div className="q-empty-icon">🎵</div>
+            <p>Drop <strong>audio files</strong><br />or click <strong>Add</strong></p>
           </div>
         ) : filteredTracks.length === 0 ? (
-          <div className="queue-empty">
-            <div className="emp-icon">🔍</div>
-            <p>No results for "<strong>{searchQuery}</strong>"</p>
+          <div className="q-empty">
+            <div className="q-empty-icon">🔍</div>
+            <p>No results for<br /><strong>"{searchQuery}"</strong></p>
           </div>
         ) : (
-          <div className="queue-virtual" style={{ height: `${filteredTracks.length * ITEM_HEIGHT}px` }}>
-            {visible.map(({ t, i }, localIdx) => (
+          <div className="queue-virtual" style={{ height: `${filteredTracks.length * ITEM_H}px` }}>
+            {visible.map(({ t, i }, li) => (
               <div
                 key={t.id}
                 className="queue-row"
-                style={{ transform: `translateY(${(startIndex + localIdx) * ITEM_HEIGHT}px)` }}
+                style={{ transform: `translateY(${(startIdx + li) * ITEM_H}px)` }}
               >
                 <TrackItem
-                  track={t}
-                  index={i}
+                  track={t} index={i}
                   isActive={i === currentIndex}
                   isPlaying={isPlaying}
                   searchQuery={searchQuery}
