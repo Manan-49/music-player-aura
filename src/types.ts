@@ -18,11 +18,11 @@ export interface MoodConfig {
 }
 
 export const MOODS: Record<Mood, MoodConfig> = {
-  standby:    { icon: '✦',  label: 'Standby',    cls: '' },
-  calm:       { icon: '🌊', label: 'Calm',        cls: 'mood-calm' },
-  energetic:  { icon: '⚡', label: 'Energetic',   cls: 'mood-energetic' },
-  melancholic:{ icon: '🌙', label: 'Melancholic', cls: 'mood-melancholic' },
-  euphoric:   { icon: '✨', label: 'Euphoric',    cls: 'mood-euphoric' },
+  standby: { icon: '✦', label: 'Standby', cls: '' },
+  calm: { icon: '🌊', label: 'Calm', cls: 'mood-calm' },
+  energetic: { icon: '⚡', label: 'Energetic', cls: 'mood-energetic' },
+  melancholic: { icon: '🌙', label: 'Melancholic', cls: 'mood-melancholic' },
+  euphoric: { icon: '✨', label: 'Euphoric', cls: 'mood-euphoric' },
 };
 
 export const SPEEDS = [1, 1.25, 1.5, 0.75] as const;

@@ -40,6 +40,7 @@ function TrackItem({
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', String(index));
+    e.dataTransfer.effectAllowed = 'move';
     itemRef.current?.classList.add('dragging');
   };
 
@@ -47,6 +48,7 @@ function TrackItem({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     if (!dragOverRef.current) {
       dragOverRef.current = true;
       itemRef.current?.classList.add('drag-over');
@@ -97,16 +99,34 @@ function TrackItem({
         </div>
         <div className="track-thumb">
           {track.art ? (
-            <img src={track.art} alt="" />
+            <img src={track.art} alt="" draggable={false} />
           ) : (
             <span>🎵</span>
           )}
-          <div className="hover-play" aria-hidden="true">{playing ? '⏸' : '▶'}</div>
+          <div className="hover-play" aria-hidden="true">
+            {playing ? (
+              <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                <rect x="5" y="4" width="4" height="16" rx="1" />
+                <rect x="15" y="4" width="4" height="16" rx="1" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                <polygon points="6 3 20 12 6 21 6 3" />
+              </svg>
+            )}
+          </div>
         </div>
         <div className="track-info">
           <div className="track-name">{nameNodes}</div>
-          <div className="track-sub">{artistNodes}</div>
-          <div className="track-dur">{track.duration ? fmt(track.duration) : '-'}</div>
+          <div className="track-sub">
+            <span>{artistNodes}</span>
+            {track.duration != null && (
+              <>
+                <span className="track-sep">·</span>
+                <span className="track-dur">{fmt(track.duration)}</span>
+              </>
+            )}
+          </div>
         </div>
       </button>
       <button
@@ -115,7 +135,9 @@ function TrackItem({
         aria-label={`Remove ${name}`}
         onClick={() => onRemove(index)}
       >
-        x
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
       </button>
     </div>
   );

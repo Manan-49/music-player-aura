@@ -8,11 +8,11 @@ const AMB_ORBS = [
 ];
 
 const MOOD_PALETTES: Record<Mood, [number, number, number][]> = {
-  standby:     [[250, 70, 52], [320, 62, 50], [180, 66, 54]],
-  calm:        [[165, 80, 55], [200, 72, 54], [140, 76, 54]],
-  energetic:   [[330, 88, 60], [20,  90, 60], [0,  82, 55]],
+  standby: [[250, 70, 52], [320, 62, 50], [180, 66, 54]],
+  calm: [[165, 80, 55], [200, 72, 54], [140, 76, 54]],
+  energetic: [[330, 88, 60], [20, 90, 60], [0, 82, 55]],
   melancholic: [[220, 72, 50], [250, 66, 50], [200, 62, 54]],
-  euphoric:    [[45,  95, 65], [30,  90, 60], [60, 86, 60]],
+  euphoric: [[45, 95, 65], [30, 90, 60], [60, 86, 60]],
 };
 
 export function useAmbientCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>, mood: Mood) {
@@ -36,8 +36,12 @@ export function useAmbientCanvas(canvasRef: React.RefObject<HTMLCanvasElement | 
     if (!ctx) return;
 
     const resize = () => {
-      cv.width = window.innerWidth;
-      cv.height = window.innerHeight;
+      const dpr = window.devicePixelRatio || 1;
+      cv.width = window.innerWidth * dpr;
+      cv.height = window.innerHeight * dpr;
+      cv.style.width = `${window.innerWidth}px`;
+      cv.style.height = `${window.innerHeight}px`;
+      ctx.scale(dpr, dpr);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -49,7 +53,8 @@ export function useAmbientCanvas(canvasRef: React.RefObject<HTMLCanvasElement | 
       rafRef.current = requestAnimationFrame(loop);
       if (document.visibilityState === 'hidden') return;
       tRef.current += speed;
-      const W = cv.width, H = cv.height;
+      const W = window.innerWidth;
+      const H = window.innerHeight;
       ctx.clearRect(0, 0, W, H);
       for (let i = 0; i < orbsRef.current.length; i++) {
         const o = orbsRef.current[i];

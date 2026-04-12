@@ -21,12 +21,13 @@ export default function App() {
   const moodClass = moodConfig.cls;
 
   const [mobileQueueOpen, setMobileQueueOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
   const [playlistDialogOpen, setPlaylistDialogOpen] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const [playlistError, setPlaylistError] = useState('');
 
   const playlistInputRef = useRef<HTMLInputElement>(null);
-  const dropOverlayRef = useRef<HTMLDivElement>(null);
 
   const {
     audioRef,
@@ -38,12 +39,10 @@ export default function App() {
     setVolume,
     toggleImmersive,
     toggleLike,
-    toggleMini,
     addFiles,
     currentIndex,
     loadTrack,
     immersiveOpen,
-    miniMode,
     tracks,
     playlists,
     savePlaylist,
@@ -58,11 +57,6 @@ export default function App() {
       document.documentElement.classList.remove(...allCls);
     };
   }, [moodClass]);
-
-  // Apply mini-mode class to document root
-  useEffect(() => {
-    document.documentElement.classList.toggle('mini-mode', miniMode);
-  }, [miniMode]);
 
   useEffect(() => {
     if (!playlistDialogOpen) return;
@@ -79,18 +73,18 @@ export default function App() {
   // Global drag-over for drop zone
   const handleGlobalDragOver = useCallback((e: DragEvent) => {
     e.preventDefault();
-    dropOverlayRef.current?.classList.add('active');
+    setDropActive(true);
   }, []);
 
   const handleGlobalDragLeave = useCallback((e: DragEvent) => {
     if (!e.relatedTarget) {
-      dropOverlayRef.current?.classList.remove('active');
+      setDropActive(false);
     }
   }, []);
 
   const handleGlobalDrop = useCallback((e: DragEvent) => {
     e.preventDefault();
-    dropOverlayRef.current?.classList.remove('active');
+    setDropActive(false);
     const files = Array.from(e.dataTransfer?.files || []);
     if (files.length) addFiles(files);
   }, [addFiles]);
@@ -155,9 +149,6 @@ export default function App() {
         case 'KeyL':
           toggleLike();
           break;
-        case 'KeyM':
-          toggleMini();
-          break;
         case 'KeyQ':
           setMobileQueueOpen((v) => !v);
           break;
@@ -178,7 +169,6 @@ export default function App() {
     setVolume,
     toggleImmersive,
     toggleLike,
-    toggleMini,
     togglePlay,
     toggleRepeat,
     toggleShuffle,
@@ -229,7 +219,6 @@ export default function App() {
           onSavePlaylist={handleSavePlaylist}
           onLoadPlaylist={store.loadPlaylist}
           onToggleImmersive={store.toggleImmersive}
-          onToggleMini={store.toggleMini}
           mobileQueueOpen={mobileQueueOpen}
           onToggleMobileQueue={() => setMobileQueueOpen((v) => !v)}
         />
@@ -241,7 +230,9 @@ export default function App() {
           isPlaying={store.isPlaying}
           searchQuery={store.searchQuery}
           mobileOpen={mobileQueueOpen}
+          collapsed={sidebarCollapsed}
           onCloseMobile={() => setMobileQueueOpen(false)}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
           onSelect={handleTrackSelect}
           onRemove={store.removeTrack}
           onReorder={store.reorderTrack}
@@ -249,8 +240,21 @@ export default function App() {
           onSearch={store.setSearchQuery}
         />
 
+        {sidebarCollapsed && (
+          <button
+            className="sidebar-expand-btn"
+            onClick={() => setSidebarCollapsed(false)}
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+        )}
+
         <main className="main" id="main-area" aria-hidden={mobileQueueOpen}>
-          <div ref={dropOverlayRef} className="drop-zone">
+          <div className={`drop-zone${dropActive ? ' active' : ''}`}>
             <div className="dz-icon">🎶</div>
             <p>Drop audio files here</p>
           </div>
@@ -304,8 +308,6 @@ export default function App() {
           currentTrack={store.currentTrack}
           isPlaying={store.isPlaying}
           progress={store.progress}
-          miniMode={store.miniMode}
-          onToggleMini={store.toggleMini}
           onTogglePlay={store.togglePlay}
           onPrev={store.prevTrack}
           onNext={store.nextTrack}

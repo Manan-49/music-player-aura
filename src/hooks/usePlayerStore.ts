@@ -26,7 +26,6 @@ export function usePlayerStore() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [immersiveOpen, setImmersiveOpen] = useState(false);
-  const [miniMode, setMiniMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [playlists, setPlaylists] = useState<Record<string, string[]>>(() => {
     try { return JSON.parse(localStorage.getItem('aura:playlists') || '{}'); }
@@ -55,11 +54,13 @@ export function usePlayerStore() {
   const libraryRef = useRef<Track[]>([]);
   const waveformCacheRef = useRef<Map<string, { data: Float32Array; duration: number }>>(new Map());
   const timePersistRef = useRef(0);
+  const speedIdxRef = useRef(0);
 
   currentIndexRef.current = currentIndex;
   tracksRef.current = tracks;
   isPlayingRef.current = isPlaying;
   libraryRef.current = library;
+  speedIdxRef.current = speedIdx;
 
   const saveOrder = useCallback((t: Track[]) => {
     localStorage.setItem('aura:order', JSON.stringify(t.map((x) => x.id)));
@@ -90,10 +91,13 @@ export function usePlayerStore() {
 
   // Boot: open DB, restore tracks
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const db = await openDB();
+      if (cancelled) return;
       dbRef.current = db;
       const stored = await dbGetAll(db);
+      if (cancelled) return;
       const loaded: Track[] = stored.map((s) => ({ ...s, url: URL.createObjectURL(s.blob) }));
       const savedOrder = JSON.parse(localStorage.getItem('aura:order') || '[]') as string[];
       if (savedOrder.length) {
@@ -112,13 +116,16 @@ export function usePlayerStore() {
       const lastIdx = parseInt(localStorage.getItem('aura:lastIdx') || '-1', 10);
       if (lastIdx >= 0 && loaded[lastIdx]) {
         await loadTrackInternal(lastIdx, false, loaded);
+        if (cancelled) return;
         const t = parseFloat(localStorage.getItem('aura:lastTime') || '0');
         if (t && audioRef.current) audioRef.current.currentTime = t;
       }
     })().catch(() => {
-      showErrorToast('Could not restore library from local storage.');
+      if (!cancelled) showErrorToast('Could not restore library from local storage.');
     });
-  }, [showErrorToast]);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const ensureAudioCtx = useCallback(() => {
     if (!audioReadyRef.current && audioRef.current) {
@@ -140,7 +147,7 @@ export function usePlayerStore() {
       audioReadyRef.current = true;
     }
     if (audioCtxRef.current?.state === 'suspended') {
-      audioCtxRef.current.resume().catch(() => {});
+      audioCtxRef.current.resume().catch(() => { });
     }
   }, []);
 
@@ -189,7 +196,7 @@ export function usePlayerStore() {
 
     if (audioRef.current) {
       audioRef.current.src = t.url;
-      audioRef.current.playbackRate = SPEEDS[speedIdx] ?? 1;
+      audioRef.current.playbackRate = SPEEDS[speedIdxRef.current] ?? 1;
       audioRef.current.load();
     }
 
@@ -217,7 +224,7 @@ export function usePlayerStore() {
         setIsPlaying(false);
       }
     }
-  }, [applyTheme, buildWaveform, ensureAudioCtx, showNowPlayingToast, speedIdx]);
+  }, [applyTheme, buildWaveform, ensureAudioCtx, showNowPlayingToast]);
 
   const loadTrack = useCallback((index: number, autoplay = false) => loadTrackInternal(index, autoplay), [loadTrackInternal]);
 
@@ -302,7 +309,6 @@ export function usePlayerStore() {
   }, []);
 
   const toggleImmersive = useCallback(() => setImmersiveOpen((v) => !v), []);
-  const toggleMini = useCallback(() => setMiniMode((v) => !v), []);
 
   const addFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
@@ -363,14 +369,14 @@ export function usePlayerStore() {
         });
         setTracks((prev) => [...prev]);
         setLibrary((prev) => [...prev]);
-      }).catch(() => {});
+      }).catch(() => { });
 
       extractDuration(track).then((dur) => {
         if (dur !== null) {
           track.duration = dur;
           setTracks((prev) => [...prev]);
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [loadTrack, saveOrder, showErrorToast]);
 
@@ -468,6 +474,7 @@ export function usePlayerStore() {
     if (name === 'Library' || !name) {
       const base = [...libraryRef.current];
       setTracks(base);
+      tracksRef.current = base;
       const preservedIdx = activeId ? base.findIndex((t) => t.id === activeId) : -1;
       if (preservedIdx >= 0) setCurrentIndex(preservedIdx);
       else {
@@ -487,6 +494,7 @@ export function usePlayerStore() {
       .map((id) => libraryRef.current.find((t) => t.id === id))
       .filter(Boolean) as Track[];
     setTracks(filtered);
+    tracksRef.current = filtered;
     const preservedIdx = activeId ? filtered.findIndex((t) => t.id === activeId) : -1;
     if (preservedIdx >= 0) {
       setCurrentIndex(preservedIdx);
@@ -523,7 +531,7 @@ export function usePlayerStore() {
     const onEnded = () => {
       if (repeat) {
         audio.currentTime = 0;
-        audio.play().catch(() => {});
+        audio.play().catch(() => { });
         return;
       }
       nextTrack();
@@ -618,7 +626,6 @@ export function usePlayerStore() {
     currentTime,
     duration,
     immersiveOpen,
-    miniMode,
     searchQuery,
     playlists,
     activePlaylist,
@@ -637,7 +644,6 @@ export function usePlayerStore() {
     cycleSpeed,
     toggleLike,
     toggleImmersive,
-    toggleMini,
     addFiles,
     removeTrack,
     reorderTrack,

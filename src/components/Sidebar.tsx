@@ -9,7 +9,9 @@ interface Props {
   isPlaying: boolean;
   searchQuery: string;
   mobileOpen: boolean;
+  collapsed: boolean;
   onCloseMobile: () => void;
+  onToggleCollapse: () => void;
   onSelect: (index: number) => void;
   onRemove: (index: number) => void;
   onReorder: (from: number, to: number) => void;
@@ -27,7 +29,9 @@ function Sidebar({
   isPlaying,
   searchQuery,
   mobileOpen,
+  collapsed,
   onCloseMobile,
+  onToggleCollapse,
   onSelect,
   onRemove,
   onReorder,
@@ -66,17 +70,48 @@ function Sidebar({
     };
   }, [filteredTracks, scrollTop, viewportHeight]);
 
+  const asideClass = [
+    'sidebar',
+    mobileOpen && 'open',
+    collapsed && 'collapsed',
+  ].filter(Boolean).join(' ');
+
   return (
-    <aside className={`sidebar${mobileOpen ? ' open' : ''}`} aria-label="Queue">
+    <aside className={asideClass} aria-label="Queue">
       <div className="sidebar-header">
-        <span className="sidebar-title">Queue</span>
+        <div className="sidebar-header-left">
+          <span className="sidebar-title">Queue</span>
+          <button
+            className="sidebar-icon-btn sidebar-collapse-btn"
+            onClick={onToggleCollapse}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
         <div className="sidebar-meta">
           <span className="track-count">{n} track{n !== 1 ? 's' : ''}</span>
-          <button className="clear-btn" onClick={onClearAll} title="Clear all" aria-label="Clear all tracks">
-            x
+          <button
+            className="sidebar-icon-btn"
+            onClick={onClearAll}
+            title="Clear all"
+            aria-label="Clear all tracks"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
-          <button className="sidebar-close" onClick={onCloseMobile} aria-label="Close queue panel">
-            x
+          <button
+            className="sidebar-icon-btn sidebar-close"
+            onClick={onCloseMobile}
+            aria-label="Close queue panel"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
       </div>

@@ -10,7 +10,6 @@ interface Props {
   onSavePlaylist: () => void;
   onLoadPlaylist: (name: string) => void;
   onToggleImmersive: () => void;
-  onToggleMini: () => void;
   mobileQueueOpen: boolean;
   onToggleMobileQueue: () => void;
 }
@@ -23,7 +22,6 @@ export default function Header({
   onSavePlaylist,
   onLoadPlaylist,
   onToggleImmersive,
-  onToggleMini,
   mobileQueueOpen,
   onToggleMobileQueue,
 }: Props) {
@@ -85,7 +83,7 @@ export default function Header({
             <line x1="4" y1="12" x2="20" y2="12" />
             <line x1="4" y1="18" x2="14" y2="18" />
           </svg>
-          Queue
+          <span className="hdr-btn-label">Queue</span>
         </button>
 
         <select
@@ -101,11 +99,11 @@ export default function Header({
           ))}
         </select>
 
-        <button className="hdr-btn" onClick={() => fileInputRef.current?.click()}>
+        <button className="hdr-btn" onClick={() => fileInputRef.current?.click()} title="Add music">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M12 5v14M5 12l7-7 7 7" />
           </svg>
-          Add Music
+          <span className="hdr-btn-label">Add Music</span>
         </button>
 
         <div className="hdr-secondary">
@@ -115,7 +113,7 @@ export default function Header({
               <polyline points="17 21 17 13 7 13 7 21" />
               <polyline points="7 3 7 8 15 8" />
             </svg>
-            Save
+            <span className="hdr-btn-label">Save</span>
           </button>
 
           <button
@@ -128,8 +126,6 @@ export default function Header({
               <path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3" />
             </svg>
           </button>
-
-          <button className="hdr-btn" onClick={onToggleMini} title="Mini mode (M)">Mini</button>
         </div>
 
         <div className="hdr-menu" ref={moreMenuRef}>
@@ -152,9 +148,6 @@ export default function Header({
             </button>
             <button className="hdr-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); onToggleImmersive(); }}>
               Immersive
-            </button>
-            <button className="hdr-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); onToggleMini(); }}>
-              Mini Mode
             </button>
           </div>
         </div>

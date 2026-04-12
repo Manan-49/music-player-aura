@@ -26,12 +26,7 @@ export default function NowPlaying({ currentTrack, isLiked, onToggleLike }: Prop
     measure();
     const observer = new ResizeObserver(measure);
     if (marqueeWrapRef.current) observer.observe(marqueeWrapRef.current);
-    if (titleRef.current) observer.observe(titleRef.current);
-    window.addEventListener('resize', measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', measure);
-    };
+    return () => observer.disconnect();
   }, [title]);
 
   const titleStyle = { '--marquee-shift': `${marqueeShift}px` } as CSSProperties;

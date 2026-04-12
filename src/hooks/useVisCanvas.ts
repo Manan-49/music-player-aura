@@ -4,7 +4,8 @@ import { cssVar, toRgba } from '../lib/audio';
 function drawIdleRing(ctx: CanvasRenderingContext2D, W: number, H: number, idleT: number) {
   const cx = W / 2;
   const cy = H / 2;
-  const r = 88 + Math.sin(idleT) * 4;
+  const baseR = Math.min(W, H) * 0.285;
+  const r = baseR + Math.sin(idleT) * 4;
   const mc = cssVar('--mood-accent') || '#7c6aff';
   const g = ctx.createRadialGradient(cx, cy, r - 2, cx, cy, r + 20);
   g.addColorStop(0, toRgba(mc, 0.07));
@@ -65,7 +66,7 @@ export function useVisCanvas(
 
       const cx = W / 2;
       const cy = H / 2;
-      const artR = 88;
+      const artR = Math.min(W, H) * 0.285;
       const BARS = 120;
       const step = Math.max(1, Math.floor(freqBinCountRef.current / BARS));
 

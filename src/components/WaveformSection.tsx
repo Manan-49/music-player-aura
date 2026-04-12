@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
 import { useWaveform } from '../hooks/useWaveform';
 import { fmt } from '../lib/audio';
 
@@ -20,21 +20,49 @@ export default function WaveformSection({
   onSeek,
 }: Props) {
   const cvRef = useRef<HTMLCanvasElement>(null);
+  const sectionRef = useRef<HTMLDivElement>(null);
   const { onMouseMove, onMouseLeave } = useWaveform(cvRef, waveformData, progress);
 
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - r.left) / r.width;
-    onSeek(ratio);
-  };
+  const getSeekRatio = useCallback(
+    (clientX: number, element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    },
+    [],
+  );
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      onSeek(getSeekRatio(e.clientX, e.currentTarget));
+    },
+    [onSeek, getSeekRatio],
+  );
+
+  const handleTouch = useCallback(
+    (e: React.TouchEvent<HTMLCanvasElement>) => {
+      if (e.touches.length !== 1) return;
+      const ratio = getSeekRatio(e.touches[0].clientX, e.currentTarget);
+      onSeek(ratio);
+    },
+    [onSeek, getSeekRatio],
+  );
+
+  const handleRangeChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onSeek(parseFloat(e.target.value) / 1000);
+    },
+    [onSeek],
+  );
 
   return (
-    <div className="waveform-section">
+    <div className="waveform-section" ref={sectionRef}>
       <canvas
         ref={cvRef}
         className="waveform-canvas"
         height={46}
         onClick={handleClick}
+        onTouchStart={handleTouch}
+        onTouchMove={handleTouch}
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
         aria-hidden="true"
@@ -46,10 +74,10 @@ export default function WaveformSection({
         max="1000"
         step="1"
         value={Math.round(progress * 1000)}
-        onChange={(e) => onSeek(parseFloat(e.target.value) / 1000)}
+        onChange={handleRangeChange}
         aria-label="Seek position"
       />
-      <div className={`wf-loading${waveformLoading ? ' show' : ''}`}>Rendering waveform...</div>
+      <div className={`wf-loading${waveformLoading ? ' show' : ''}`}>Rendering waveform…</div>
       <div className="progress-times">
         <span>{fmt(currentTime)}</span>
         <span>{fmt(duration)}</span>

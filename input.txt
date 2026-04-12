@@ -1,0 +1,3 @@
+src/lib/audio.ts
+src/lib/db.ts
+src/main.tsx

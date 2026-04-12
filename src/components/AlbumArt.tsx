@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useVisCanvas } from '../hooks/useVisCanvas';
 import type { Track } from '../types';
 
@@ -24,19 +24,43 @@ export default function AlbumArt({
   onMoodData,
 }: Props) {
   const visCvRef = useRef<HTMLCanvasElement>(null);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState(310);
+
+  useEffect(() => {
+    const measure = () => {
+      const el = sectionRef.current;
+      if (!el) return;
+      const artEl = el.querySelector('.album-art') as HTMLElement | null;
+      if (artEl) {
+        const rect = artEl.getBoundingClientRect();
+        setCanvasSize(Math.round(Math.max(rect.width, rect.height) * 1.65));
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useVisCanvas(visCvRef, analyserRef, dataArrayRef, freqBinCountRef, audioReadyRef, isPlaying, onMoodData);
 
   return (
-    <div className="album-section">
-      <canvas ref={visCvRef} className="vis-canvas" width={310} height={310} />
+    <div className="album-section" ref={sectionRef}>
+      <canvas
+        ref={visCvRef}
+        className="vis-canvas"
+        width={canvasSize}
+        height={canvasSize}
+        aria-hidden="true"
+      />
       <button
         className={`album-art${isPlaying ? ' playing' : ''}`}
         onClick={onTogglePlay}
-        aria-label="Play / Pause"
+        aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {currentTrack?.art ? (
-          <img src={currentTrack.art} alt="" />
+          <img src={currentTrack.art} alt="" draggable={false} />
         ) : (
           <span className="art-emoji">🎵</span>
         )}

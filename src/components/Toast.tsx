@@ -19,9 +19,9 @@ export default function Toast({ show, currentTrack, errorMessage }: Props) {
     >
       <div className="toast-art" aria-hidden="true">
         {isError ? (
-          <span>!</span>
+          <span className="toast-error-icon">⚠</span>
         ) : currentTrack?.art ? (
-          <img src={currentTrack.art} alt="" />
+          <img src={currentTrack.art} alt="" draggable={false} />
         ) : (
           <span>🎵</span>
         )}
@@ -29,7 +29,7 @@ export default function Toast({ show, currentTrack, errorMessage }: Props) {
       <div className="toast-info">
         <div className="toast-label">{isError ? 'Error' : 'Now Playing'}</div>
         {isError ? (
-          <div className="toast-title">{errorMessage}</div>
+          <div className="toast-title toast-error-msg">{errorMessage}</div>
         ) : (
           <>
             <div className="toast-title">{title}</div>
