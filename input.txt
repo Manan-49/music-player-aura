@@ -1,9 +1,0 @@
-src/hooks/usePlayerStore.ts
-src/hooks/useMoodEngine.ts
-src/hooks/useAmbientCanvas.ts
-src/hooks/useVisCanvas.ts
-src/hooks/useWaveform.ts
-src/lib/audio.ts
-src/lib/db.ts
-package.json
-index.html
